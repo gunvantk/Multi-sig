@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.13
+pragma solidity 0.8.11;
 
 contract MultisigWallet{
     address[] public owners;
@@ -7,46 +7,53 @@ contract MultisigWallet{
     mapping(uint256 => mapping(address => bool)) approvals;
     
     struct Proposal{
-        uint256 Id,
-        address To,
-        uint256 Value,
-        calldata Data, 
-        bool Executed
+        uint256 id;
+        address to;
+        uint256 value;
+        bytes data; 
+        bool executed;
     }
 
-    Proposal[] public proposal;
+    uint256 public proposalIndex;
+    mapping(uint256 => Proposal) public proposals;
+    uint256[] public pendingProposal;
 
     constructor(uint256 minSigRequired){
         MIN_SIG_REQUIRED = minSigRequired;
+        owners.push(msg.sender);
     }
 
 
-    function addOwner(address owner) onlyOwner{
-        require(owners != address(0), "invalid address");
+    function addOwner(address owner) public onlyOwner{
+        require(owner != address(0), "invalid address");
         owners.push(owner);
     }
 
-    function addProposal(address to, calldata data) onlyOwner return uint256{
-        proposal.push(Proposal{
-            Id: proposal.length +1
-            To: to,
-            Value: msg.value,
-            Data: data
-        })
+    function submitProposal(address to, uint value, bytes calldata data) public onlyOwner returns (uint256 pId) {
+        uint proposalId = proposalIndex++;
+        proposals[proposalId] = Proposal({
+            id: proposalId,
+            to: to,
+            value: value,
+            data: data,
+            executed: false
+        });
 
-        for(uint256 i; i< owners.length; i++){
-           approvals[pId][owners[i]] = false;
-        }   
+        pendingProposal.push(proposalId);
 
-        return proposal.length;
+        // for(uint256 i; i< owners.length; i++){
+        //    approvals[pId][owners[i]] = false;
+        // }   
+
+        return pId;
     }
 
-    function approve(uint256 pId) onlyOwner validProposal notApproved notExecuted{
+    function approve(uint256 pId) public onlyOwner validProposal(pId) notApproved(pId) notExecuted(pId){
         approvals[pId][msg.sender] = true;
     }
 
     modifier validProposal(uint256 pId){
-        require(pId <= proposals.length, "Invalid Proposal!");
+        require(pId <= proposalIndex, "Invalid Proposal!");
         _;
     }
 
@@ -57,24 +64,25 @@ contract MultisigWallet{
 
     modifier notApproved(uint256 pId){
         require(!approvals[pId][msg.sender], "Already approved");
-        _:
+        _;
     }
 
-    modifier requirementMet(pId){
-        require(approvalount(pId) >= MIN_SIG_REQUIRED, "Not enough approval.")
+    modifier requirementMet(uint256 pId){
+        require(approvalCount(pId) >= MIN_SIG_REQUIRED, "Not enough approval.");
+        _;
     }
 
-    function isOwner() internal return bool{
+    function isOwner() internal view returns(bool){
         for(uint256 i; i< owners.length; i++){
             if(owners[i] == msg.sender){
                 return true;
             }
         }   
 
-        returns false;   
+        return false;   
     }
 
-    function approvalount(uint256 pId) public view return uint256 count{
+    function approvalCount(uint256 pId) public view returns(uint256 count){
         for(uint256 i; i< owners.length; i++){
             if(approvals[pId][owners[i]]){
                 count++;
@@ -83,19 +91,20 @@ contract MultisigWallet{
     }
 
     modifier notExecuted(uint256 pId){
-        require(!proposal[pId-1].Executed, "Already executed!")
+        require(!proposals[pId].executed, "Already executed!");
+        _;
     }
 
-    function executeProposal(uint256 pId) validProposal OonlyOwner notExecuted requirementMet  return bool{
-        Proposal storage proposal = proposals[pId -1];
-        proposal.Executed = true;
+    function executeProposal(uint256 pId) public validProposal(pId) onlyOwner notExecuted(pId) requirementMet(pId)  returns(bool){
+        Proposal storage proposal = proposals[pId];
+        proposal.executed = true;
 
-        (bool Success,) = proposal.to.call{value= proposal.Value}(proposal.data);
+        (bool Success,) = proposal.to.call{value: proposal.value}(proposal.data);
         require(Success, "Tx failed!");
 
     }
 
-    function revoke(uint256 pid) onlyOwner validProposal notExecuted{
+    function revoke(uint256 pId)public  onlyOwner validProposal(pId) notExecuted(pId){
          approvals[pId][msg.sender] = false;
     }
 
