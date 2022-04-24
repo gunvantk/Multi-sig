@@ -23,7 +23,6 @@ contract MultisigWallet{
         owners.push(msg.sender);
     }
 
-
     function addOwner(address owner) public onlyOwner{
         require(owner != address(0), "invalid address");
         owners.push(owner);
@@ -95,13 +94,25 @@ contract MultisigWallet{
         _;
     }
 
-    function executeProposal(uint256 pId) public validProposal(pId) onlyOwner notExecuted(pId) requirementMet(pId)  returns(bool){
+    function executeProposal(uint256 pId) public validProposal(pId) onlyOwner notExecuted(pId) requirementMet(pId)  returns(bool isSuccess){
         Proposal storage proposal = proposals[pId];
         proposal.executed = true;
-
+        removeProposal(pId);    
         (bool Success,) = proposal.to.call{value: proposal.value}(proposal.data);
         require(Success, "Tx failed!");
+        return true;
+    }
 
+    function removeProposal(uint256 pId) private{
+        uint pIndex;
+        for(uint256 i=0; i < pendingProposal.length; i++){
+            if(pendingProposal[i] == pId){
+                pIndex = i;
+            }
+        }
+        //removing element without preserving order
+        pendingProposal[pIndex] = pendingProposal[pendingProposal.length -1];     
+        pendingProposal.pop();
     }
 
     function revoke(uint256 pId)public  onlyOwner validProposal(pId) notExecuted(pId){
