@@ -1,0 +1,4 @@
+bin/contract/MultisigWallet.json
+bin/contract/MultisigWallet-solc-output.json
+bin/contract/MultisigWallet.abi
+bin/contract/MultisigWallet.bin
