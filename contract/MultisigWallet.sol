@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.11;
+pragma solidity 0.8.13;
 
-contract MultisigWallet{
+contract MultisigWallet {
     event ProposalSubmitted(
         address indexed owner,
         uint256 indexed proposalId,
@@ -15,27 +15,23 @@ contract MultisigWallet{
         address indexed approvedBy
     );
 
-      event ProposalApprovalRevoked(
+    event ProposalApprovalRevoked(
         uint256 indexed proposalId,
         address indexed revokedBy
     );
 
-      event ProposalExecuted(
+    event ProposalExecuted(
         uint256 indexed proposalId,
         address indexed executedBy
     );
 
-    event Deposit(
-        uint256 value,
-        address indexed depositedBy
-    );
-
+    event Deposit(uint256 value, address indexed depositedBy);
 
     address[] public owners;
     uint256 private MIN_SIG_REQUIRED;
     mapping(uint256 => mapping(address => bool)) approvals;
-    
-    constructor(uint256 minSigRequired){
+
+    constructor(uint256 minSigRequired) {
         MIN_SIG_REQUIRED = minSigRequired;
         owners.push(msg.sender);
     }
@@ -44,11 +40,11 @@ contract MultisigWallet{
         emit Deposit(msg.value, msg.sender);
     }
 
-    struct Proposal{
+    struct Proposal {
         uint256 id;
         address to;
         uint256 value;
-        bytes data; 
+        bytes data;
         bool executed;
     }
 
@@ -56,14 +52,17 @@ contract MultisigWallet{
     mapping(uint256 => Proposal) public proposals;
     uint256[] public pendingProposal;
 
-   
-    function addOwner(address owner) public onlyOwner{
+    function addOwner(address owner) public onlyOwner {
         require(owner != address(0), "invalid address");
         owners.push(owner);
     }
 
-    function submitProposal(address to, uint value, bytes calldata data) public onlyOwner returns (uint256 pId) {
-        uint proposalId = proposalIndex++;
+    function submitProposal(
+        address to,
+        uint256 value,
+        bytes calldata data
+    ) public onlyOwner returns (uint256 pId) {
+        uint256 proposalId = proposalIndex++;
         proposals[proposalId] = Proposal({
             id: proposalId,
             to: to,
@@ -77,79 +76,98 @@ contract MultisigWallet{
         return pId;
     }
 
-    function approve(uint256 pId) public onlyOwner validProposal(pId) notApproved(pId) notExecuted(pId){
+    function approve(uint256 pId)
+        public
+        onlyOwner
+        validProposal(pId)
+        notApproved(pId)
+        notExecuted(pId)
+    {
         approvals[pId][msg.sender] = true;
         emit ProposalApproved(pId, msg.sender);
     }
 
-    modifier validProposal(uint256 pId){
+    modifier validProposal(uint256 pId) {
         require(pId <= proposalIndex, "Invalid Proposal!");
         _;
     }
 
-    modifier onlyOwner(){
+    modifier onlyOwner() {
         require(isOwner(), "Only owner can execute!");
         _;
     }
 
-    modifier notApproved(uint256 pId){
+    modifier notApproved(uint256 pId) {
         require(!approvals[pId][msg.sender], "Already approved");
         _;
     }
 
-    modifier requirementMet(uint256 pId){
+    modifier requirementMet(uint256 pId) {
         require(approvalCount(pId) >= MIN_SIG_REQUIRED, "Not enough approval.");
         _;
     }
 
-    function isOwner() internal view returns(bool){
-        for(uint256 i; i< owners.length; i++){
-            if(owners[i] == msg.sender){
+    function isOwner() internal view returns (bool) {
+        for (uint256 i; i < owners.length; i++) {
+            if (owners[i] == msg.sender) {
                 return true;
             }
-        }   
+        }
 
-        return false;   
+        return false;
     }
 
-    function approvalCount(uint256 pId) public view returns(uint256 count){
-        for(uint256 i; i< owners.length; i++){
-            if(approvals[pId][owners[i]]){
+    function approvalCount(uint256 pId) public view returns (uint256 count) {
+        for (uint256 i; i < owners.length; i++) {
+            if (approvals[pId][owners[i]]) {
                 count++;
             }
-        }       
+        }
     }
 
-    modifier notExecuted(uint256 pId){
+    modifier notExecuted(uint256 pId) {
         require(!proposals[pId].executed, "Already executed!");
         _;
     }
 
-    function executeProposal(uint256 pId) public validProposal(pId) onlyOwner notExecuted(pId) requirementMet(pId)  returns(bool isSuccess){
+    function executeProposal(uint256 pId)
+        public
+        validProposal(pId)
+        onlyOwner
+        notExecuted(pId)
+        requirementMet(pId)
+        returns (bool isSuccess)
+    {
         Proposal storage proposal = proposals[pId];
         proposal.executed = true;
-        removeProposal(pId);    
-        (bool Success,) = proposal.to.call{value: proposal.value}(proposal.data);
+        removeProposal(pId);
+        (bool Success, ) = proposal.to.call{value: proposal.value}(
+            proposal.data
+        );
         require(Success, "Tx failed!");
         emit ProposalExecuted(pId, msg.sender);
         return true;
     }
 
-    function removeProposal(uint256 pId) private{
-        uint pIndex;
-        for(uint256 i=0; i < pendingProposal.length; i++){
-            if(pendingProposal[i] == pId){
+    function removeProposal(uint256 pId) private {
+        uint256 pIndex;
+        for (uint256 i = 0; i < pendingProposal.length; i++) {
+            if (pendingProposal[i] == pId) {
                 pIndex = i;
             }
         }
         //removing element without preserving order
-        pendingProposal[pIndex] = pendingProposal[pendingProposal.length -1];     
+        pendingProposal[pIndex] = pendingProposal[pendingProposal.length - 1];
         pendingProposal.pop();
     }
 
-    function revoke(uint256 pId)public  onlyOwner validProposal(pId) notExecuted(pId){
-         approvals[pId][msg.sender] = false;
-         emit ProposalApprovalRevoked(pId, msg.sender);
+    function revoke(uint256 pId)
+        public
+        onlyOwner
+        validProposal(pId)
+        notExecuted(pId)
+    {
+        approvals[pId][msg.sender] = false;
+        emit ProposalApprovalRevoked(pId, msg.sender);
     }
-
 }
