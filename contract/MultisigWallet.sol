@@ -2,10 +2,48 @@
 pragma solidity 0.8.11;
 
 contract MultisigWallet{
+    event ProposalSubmitted(
+        address indexed owner,
+        uint256 indexed proposalId,
+        address indexed to,
+        uint256 value,
+        bytes data
+    );
+
+    event ProposalApproved(
+        uint256 indexed proposalId,
+        address indexed approvedBy
+    );
+
+      event ProposalApprovalRevoked(
+        uint256 indexed proposalId,
+        address indexed revokedBy
+    );
+
+      event ProposalExecuted(
+        uint256 indexed proposalId,
+        address indexed executedBy
+    );
+
+    event Deposit(
+        uint256 value,
+        address indexed depositedBy
+    );
+
+
     address[] public owners;
     uint256 private MIN_SIG_REQUIRED;
     mapping(uint256 => mapping(address => bool)) approvals;
     
+    constructor(uint256 minSigRequired){
+        MIN_SIG_REQUIRED = minSigRequired;
+        owners.push(msg.sender);
+    }
+
+    receive() external payable {
+        emit Deposit(msg.value, msg.sender);
+    }
+
     struct Proposal{
         uint256 id;
         address to;
@@ -18,11 +56,7 @@ contract MultisigWallet{
     mapping(uint256 => Proposal) public proposals;
     uint256[] public pendingProposal;
 
-    constructor(uint256 minSigRequired){
-        MIN_SIG_REQUIRED = minSigRequired;
-        owners.push(msg.sender);
-    }
-
+   
     function addOwner(address owner) public onlyOwner{
         require(owner != address(0), "invalid address");
         owners.push(owner);
@@ -39,16 +73,13 @@ contract MultisigWallet{
         });
 
         pendingProposal.push(proposalId);
-
-        // for(uint256 i; i< owners.length; i++){
-        //    approvals[pId][owners[i]] = false;
-        // }   
-
+        emit ProposalSubmitted(msg.sender, proposalId, to, value, data);
         return pId;
     }
 
     function approve(uint256 pId) public onlyOwner validProposal(pId) notApproved(pId) notExecuted(pId){
         approvals[pId][msg.sender] = true;
+        emit ProposalApproved(pId, msg.sender);
     }
 
     modifier validProposal(uint256 pId){
@@ -100,6 +131,7 @@ contract MultisigWallet{
         removeProposal(pId);    
         (bool Success,) = proposal.to.call{value: proposal.value}(proposal.data);
         require(Success, "Tx failed!");
+        emit ProposalExecuted(pId, msg.sender);
         return true;
     }
 
@@ -117,6 +149,7 @@ contract MultisigWallet{
 
     function revoke(uint256 pId)public  onlyOwner validProposal(pId) notExecuted(pId){
          approvals[pId][msg.sender] = false;
+         emit ProposalApprovalRevoked(pId, msg.sender);
     }
 
 }
